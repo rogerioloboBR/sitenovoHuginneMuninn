@@ -13,7 +13,61 @@ datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
 }
-// Modelo User adicionado aqui:
+// Adicione este novo modelo para Permission
+model Permission {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(100) // Ex: "products.create", "users.view_all", "posts.publish"
+  description String?  @db.VarChar(255)        // Descrição amigável da permissão
+  group_name  String?  @db.VarChar(50)         // Agrupador para UI (ex: "Produtos", "Usuários")
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  roles RolePermission[] // Relação com a tabela de junção RolePermission
+
+  @@map("permissions")
+}
+
+// Adicione este novo modelo para a tabela de junção RolePermission
+model RolePermission {
+  role_id       Int
+  permission_id Int
+  assigned_at   DateTime @default(now())
+
+  role       Role       @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  permission Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([role_id, permission_id]) // Chave primária composta
+  @@map("role_permissions")
+}
+
+// Modifique seu modelo Role existente para adicionar a relação com RolePermission
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50)
+  description String?  @db.VarChar(255)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  users       UserRole[]
+  permissions RolePermission[] // 👈 Adicione esta linha para a relação com RolePermission
+
+  @@map("roles")
+}
+
+// Adicione este modelo para a tabela de junção UserRole
+model UserRole {
+  user_id     Int
+  role_id     Int
+  assigned_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  role Role @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([user_id, role_id]) // Chave primária composta
+  @@map("user_roles")
+}
+
+// Modifique seu modelo User existente para adicionar a relação com UserRole
 model User {
   id                Int       @id @default(autoincrement())
   name              String
@@ -24,6 +78,14 @@ model User {
   is_active         Boolean   @default(true)
   created_at        DateTime  @default(now())
   updated_at        DateTime  @updatedAt
+
+  roles    UserRole[] // 👈 Adicione esta linha para a relação com UserRole
+
+  // ... (outras relações que virão depois, como addresses, orders, etc.)
+  // addresses Address[]
+  // orders    Order[]
+  // blog_posts BlogPost[]
+  // blog_comments BlogComment[]
 
   @@map("users")
 }
