@@ -1,0 +1,56 @@
+# Arquivos de log
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+pnpm-debug.log*
+
+# Arquivos de dependências e build
+node_modules/
+dist/
+build/
+coverage/
+.env
+.env.*
+!.env.example
+
+# Arquivos gerados pelo Prisma (verifique se você quer versionar suas migrações)
+# Se você NÃO quer versionar as migrações (geralmente não recomendado para colaboração):
+# prisma/migrations/
+# Se você quer versionar as migrações (recomendado):
+# (não adicione a linha acima)
+
+# Arquivos de banco de dados SQLite (se estiver usando SQLite para desenvolvimento local)
+*.sqlite
+*.sqlite3
+*.db
+*.db3
+
+# Arquivos específicos do sistema operacional
+.DS_Store
+Thumbs.db
+
+# Arquivos de IDE e editores
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Arquivos de configuração local
+local.yml
+config/local.*.json
+config/local.js
+config/local.ts
+
+# Arquivos de dump/exportação de banco de dados (geralmente grandes e específicos do ambiente)
+dump.sql
+*.sql.gz
+
+# Outros
+.nyc_output
+.eslintcache
