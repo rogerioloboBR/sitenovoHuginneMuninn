@@ -35,7 +35,7 @@ async function bootstrap() {
         description: 'Insira o token JWT', // Descrição para a UI
         in: 'header', // Onde o token é esperado (no header Authorization)
       },
-      'jwt-auth', // Este é um nome/chave para esta definição de segurança. Usaremos em @ApiBearerAuth() nos controllers.
+      'access-token', // Este é um nome/chave para esta definição de segurança. Usaremos em @ApiBearerAuth() nos controllers.
     )
     .build(); // 👈 4. Constrói o objeto de configuração
 
