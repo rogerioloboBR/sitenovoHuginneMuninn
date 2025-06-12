@@ -6,6 +6,8 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
 import { LocalStrategy } from './auth/strategies/local.strategy';
+import { RolesModule } from './roles/roles.module';
+import { PermissionsModule } from './permissions/permissions.module';
 
 
 @Module({
@@ -13,7 +15,7 @@ import { LocalStrategy } from './auth/strategies/local.strategy';
     ConfigModule.forRoot({
       isGlobal: true, // Torna o ConfigModule disponível globalmente
       envFilePath: '.env', // Especifica o arquivo .env
-    }), PrismaModule, UsersModule, AuthModule],
+    }), PrismaModule, UsersModule, AuthModule, RolesModule, PermissionsModule],
   controllers: [AppController],
   providers: [AppService, LocalStrategy],
 })

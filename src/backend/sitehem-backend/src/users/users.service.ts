@@ -1,4 +1,3 @@
-// src/users/users.service.ts
 import {
   Injectable,
   ConflictException,
@@ -8,10 +7,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
+import { User } from '@prisma/client'; // Não precisamos de Role aqui diretamente, a menos que tipemos o retorno
+import { RolesService } from '../roles/roles.service'; // 👈 Importar RolesService
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private rolesService: RolesService, // 👈 Injetar RolesService
+  ) {}
 
   async create(createUserDto: CreateUserDto) {
     const existingUserByEmail = await this.prisma.user.findUnique({
@@ -33,7 +37,6 @@ export class UsersService {
         name: createUserDto.name,
         email: createUserDto.email,
         password: hashedPassword,
-        // is_active, email_verified_at já têm defaults no schema Prisma ou são opcionais
       },
     });
 
@@ -44,7 +47,7 @@ export class UsersService {
 
   async findAll() {
     return this.prisma.user.findMany({
-      select: {
+      select: { // Seleciona quais campos retornar para não expor a senha
         id: true,
         name: true,
         email: true,
@@ -52,7 +55,11 @@ export class UsersService {
         is_active: true,
         created_at: true,
         updated_at: true,
-        // Adicione aqui outros campos que você queira retornar, exceto a senha
+        roles: { // 👈 Incluir as associações de perfis (UserRole)
+          include: {
+            role: true, // E os detalhes de cada perfil (Role)
+          },
+        },
       },
     });
   }
@@ -60,7 +67,7 @@ export class UsersService {
   async findOne(id: number) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      select: {
+      select: { // Novamente, não expor a senha e incluir perfis
         id: true,
         name: true,
         email: true,
@@ -68,6 +75,11 @@ export class UsersService {
         is_active: true,
         created_at: true,
         updated_at: true,
+        roles: { // 👈 Incluir as associações de perfis
+          include: {
+            role: true, // E os detalhes de cada perfil
+          },
+        },
       },
     });
     if (!user) {
@@ -75,14 +87,12 @@ export class UsersService {
     }
     return user;
   }
-   async findOneByEmailForAuth(email: string) {
-    // Este método é específico para autenticação e retorna a senha
+
+  async findOneByEmailForAuth(email: string): Promise<User | null> {
+    // Este método é usado pela AuthService e precisa retornar o usuário com senha
     const user = await this.prisma.user.findUnique({
       where: { email },
     });
-    if (!user) {
-      return null; // Ou throw NotFoundException se preferir que o auth service lide com isso
-    }
     return user; // Retorna o usuário completo, incluindo o hash da senha
   }
 
@@ -92,7 +102,6 @@ export class UsersService {
       throw new NotFoundException(`Usuário com ID #${id} não encontrado para atualização.`);
     }
 
-    // Se o email estiver sendo atualizado, verifique se o novo email já existe para outro usuário
     if (updateUserDto.email && updateUserDto.email !== userToUpdate.email) {
       const existingUserByEmail = await this.prisma.user.findUnique({
         where: { email: updateUserDto.email },
@@ -111,13 +120,13 @@ export class UsersService {
         saltOrRounds,
       );
     } else {
-      // Garante que a senha não seja definida como null ou undefined se não for passada
       delete dataToUpdate.password;
     }
 
     const updatedUser = await this.prisma.user.update({
       where: { id },
       data: dataToUpdate,
+      // Não vamos incluir 'roles' aqui, pois a atualização de perfis será feita por endpoints dedicados
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -130,11 +139,79 @@ export class UsersService {
     if (!userExists) {
       throw new NotFoundException(`Usuário com ID #${id} não encontrado para exclusão.`);
     }
-
+    // O onDelete: Cascade na relação User -> UserRole no schema.prisma
+    // deve cuidar da remoção das associações em user_roles.
     await this.prisma.user.delete({
       where: { id },
     });
-    // Você pode retornar void, uma mensagem, ou o usuário deletado (sem a senha)
     return { message: `Usuário com ID #${id} deletado com sucesso.` };
+  }
+
+  // --- NOVOS MÉTODOS PARA ASSOCIAÇÃO DE PERFIS (ROLES) ---
+
+  async assignRoleToUser(userId: number, roleId: number) {
+    // 1. Verificar se o Usuário existe
+    // Usamos o findOne deste próprio service, que já lança NotFoundException
+    await this.findOne(userId); // Garante que o usuário existe
+
+    // 2. Verificar se o Perfil (Role) existe
+    // Usamos o findOne do RolesService injetado
+    await this.rolesService.findOne(roleId); // Lançará NotFoundException se o perfil não existir
+
+    // 3. Verificar se a associação já existe para evitar erro de chave duplicada
+    const existingAssociation = await this.prisma.userRole.findUnique({
+      where: {
+        user_id_role_id: { // Nome do índice/chave primária composta no schema.prisma
+          user_id: userId,
+          role_id: roleId,
+        },
+      },
+    });
+
+    if (existingAssociation) {
+      throw new ConflictException('Este perfil já está atribuído a este usuário.');
+    }
+
+    // 4. Criar a associação na tabela user_roles
+    return this.prisma.userRole.create({
+      data: {
+        user_id: userId,
+        role_id: roleId,
+      },
+      include: { // Opcional: retornar dados relacionados para confirmação
+        user: { // Selecionar campos específicos do usuário para não expor a senha
+          select: { id: true, name: true, email: true }
+        },
+        role: true,
+      },
+    });
+  }
+
+  async removeRoleFromUser(userId: number, roleId: number) {
+    // 1. Verificar se a associação existe antes de tentar deletar
+    const association = await this.prisma.userRole.findUnique({
+      where: {
+        user_id_role_id: {
+          user_id: userId,
+          role_id: roleId,
+        },
+      },
+    });
+
+    if (!association) {
+      throw new NotFoundException(
+        'Associação entre este usuário e perfil não encontrada para remoção.',
+      );
+    }
+
+    // 2. Remover a associação
+    return this.prisma.userRole.delete({
+      where: {
+        user_id_role_id: {
+          user_id: userId,
+          role_id: roleId,
+        },
+      },
+    });
   }
 }
